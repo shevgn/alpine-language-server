@@ -3,18 +3,6 @@ import {
     CompletionItemKind,
     InsertTextFormat,
 } from "vscode-languageserver";
-import { AlpineEvent, keyboardEvents, mouseEvents } from "./events.js";
-
-const shorthands = (): CompletionItem[] => {
-    return [...keyboardEvents, ...mouseEvents].map((event: AlpineEvent) => ({
-        label: `@${event.name}`,
-        kind: CompletionItemKind.Event,
-        insertText: "@" + event.name + '="${1}"',
-        insertTextFormat: InsertTextFormat.Snippet,
-        documentation:
-            event.documentation + `\nShorthand for x-on:${event.name}`,
-    }));
-};
 
 const directives = (): CompletionItem[] => {
     return [
@@ -36,7 +24,25 @@ Defines a chunk of HTML as an Alpine component and provides the reactive data fo
 Allows you to easily run code on dispatched DOM events.
 `,
         },
+        {
+            label: "x-init",
+            kind: CompletionItemKind.Keyword,
+            insertText: 'x-init="${1}"',
+            insertTextFormat: InsertTextFormat.Snippet,
+            documentation: `
+Allows you to run JavaScript code when the component is initialized.
+            `,
+        },
+        {
+            label: "x-show",
+            kind: CompletionItemKind.Keyword,
+            insertText: 'x-show="${1}"',
+            insertTextFormat: InsertTextFormat.Snippet,
+            documentation: `
+Allows you to conditionally show or hide an element based on a boolean value.
+            `,
+        },
     ];
 };
 
-export { shorthands, directives };
+export { directives };
