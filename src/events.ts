@@ -9,8 +9,6 @@ type Event = {
     documentation: string;
 };
 
-type EventType = "keyboard" | "mouse";
-
 const keyboardEvents: Event[] = [
     {
         name: "keyup",
@@ -85,25 +83,15 @@ const mouseEvents: Event[] = [
     },
 ];
 
-const events = (type: EventType): CompletionItem[] => {
-    if (type === "mouse") {
-        return mouseEvents.map((event) => ({
-            label: `${event.name}`,
-            kind: CompletionItemKind.Event,
-            insertText: `${event.name}`,
-            insertTextFormat: InsertTextFormat.Snippet,
-            documentation: event.documentation,
-        }));
-    }
-
-    return keyboardEvents.map((event) => ({
-        label: `${event.name}`,
+const events = (): CompletionItem[] => {
+    return [...mouseEvents, ...keyboardEvents].map((event) => ({
+        label: event.name,
         kind: CompletionItemKind.Event,
-        insertText: `${event.name}`,
+        insertText: event.name,
         insertTextFormat: InsertTextFormat.Snippet,
         documentation: event.documentation,
     }));
 };
 
 export { events, keyboardEvents, mouseEvents };
-export type { Event as AlpineEvent, EventType as AlpineEventType };
+export type { Event as AlpineEvent };
