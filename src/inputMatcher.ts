@@ -1,17 +1,14 @@
 import { CompletionItem } from "vscode-languageserver";
 import { directives, shorthands } from "./directives.js";
 import { events } from "./events.js";
-import { keyboardModifiers, modifiers, mouseModifiers } from "./modifiers.js";
+import { modifiers, rawModifiers } from "./modifiers.js";
 
 const eventsRe = /^.*(@|x-on:)$/s;
 const directivesRe = /^.*x$/s;
 
 function modifiersRe(type: "mouse" | "keyboard"): RegExp {
-    const list = type === "mouse" ? mouseModifiers : keyboardModifiers;
-    const evs =
-        type === "mouse"
-            ? events("mouse").map((e) => e.label)
-            : events("keyboard").map((e) => e.label);
+    const list = rawModifiers(type);
+    const evs = events(type).map((event) => event.label);
 
     return new RegExp(
         `^.*(@|x-on:)` + `(${evs.join("|")})\.` + `((${list.join("|")})\.)*$`,
