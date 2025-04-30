@@ -1,4 +1,3 @@
-import { spawn, ChildProcess } from "child_process";
 import {
     createConnection,
     TextDocuments,
@@ -19,24 +18,13 @@ import {
     getModifierCompletions,
     getShorthandCompletions,
 } from "./completions.js";
+import {
+    getAlpineUri,
+    openAlpineContext,
+    setupTypescriptServer,
+} from "./typescript-server.js";
 
-const tsProcess: ChildProcess = spawn("typescript-language-server", [
-    "--stdio",
-]);
-const tsConnection = createProtocolConnection(
-    new StreamMessageReader(tsProcess.stdout!),
-    new StreamMessageWriter(tsProcess.stdin!)
-);
-
-tsConnection.listen();
-
-const initResult = await tsConnection.sendRequest(InitializeRequest.method, {
-    processId: process.pid,
-    rootUri: null,
-    capabilities: {},
-});
-
-tsConnection.sendNotification(InitializedNotification.method);
+const tsConnection = await setupTypescriptServer();
 
 const connection = createConnection();
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
@@ -54,54 +42,6 @@ connection.onInitialize((_params: InitializeParams) => ({
         hoverProvider: true,
     },
 }));
-
-let alpineUri: string | null = null;
-let alpineVersion = 0;
-
-function openAlpineContext(params: CompletionParams) {
-    const fileUri = params.textDocument.uri;
-    alpineUri = `inmemory://model/${fileUri}.alpine.js`;
-    alpineVersion = 1;
-
-    tsConnection.sendNotification("textDocument/didOpen", {
-        textDocument: {
-            uri: alpineUri,
-            languageId: "javascript",
-            version: alpineVersion,
-            text: "",
-        },
-    });
-}
-
-function updateAlpineContext(xDataObject: string, jsSnippet: string) {
-    alpineVersion++;
-    const regex = /([A-Za-z_$][\w$]*)\s*:/g;
-    const props: string[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = regex.exec(xDataObject))) props.push(m[1]);
-
-    tsConnection.sendNotification("textDocument/didChange", {
-        textDocument: { uri: alpineUri!, version: alpineVersion },
-        contentChanges: [
-            {
-                range: {
-                    start: { line: 0, character: 0 },
-                    end: { line: 0, character: Infinity },
-                },
-                text: `const { ${props.join(", ")} } = ${xDataObject};`,
-            },
-            {
-                range: {
-                    start: { line: 1, character: 0 },
-                    end: { line: 1, character: Infinity },
-                },
-                text: jsSnippet,
-            },
-        ],
-    });
-}
-
-let lastSeenXData = "";
 
 async function getFragments(
     params: CompletionParams,
@@ -171,17 +111,14 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
             fragmentAfter.slice(0, closeQuoteIdx);
     }
 
-    if (!alpineUri) {
+    if (!getAlpineUri()) {
         openAlpineContext(params);
     }
-
-    updateAlpineContext(lastSeenXData, jsSnippet);
-    lastSeenXData = jsSnippet;
 
     const tsCompletions = await tsConnection.sendRequest(
         "textDocument/completion",
         {
-            textDocument: { uri: alpineUri },
+            textDocument: { uri: getAlpineUri() },
             position: { line: 1, character: jsSnippet.length },
             context: params.context,
         }
