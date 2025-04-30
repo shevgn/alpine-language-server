@@ -58,39 +58,50 @@ connection.onInitialize((_params: InitializeParams) => ({
 let alpineUri: string | null = null;
 let alpineVersion = 0;
 
-function openAlpineContext(fileUri: string, xDataObject: string) {
+function openAlpineContext(params: CompletionParams) {
+    const fileUri = params.textDocument.uri;
     alpineUri = `inmemory://model/${fileUri}.alpine.js`;
     alpineVersion = 1;
-
-    const regex = /([A-Za-z_$][\w$]*)\s*:/g;
-    const props: string[] = [];
-    let m: RegExpExecArray | null;
-    while ((m = regex.exec(xDataObject))) props.push(m[1]);
-
-    const text = `const { ${props.join(", ")} } = ${xDataObject};\n`;
 
     tsConnection.sendNotification("textDocument/didOpen", {
         textDocument: {
             uri: alpineUri,
             languageId: "javascript",
             version: alpineVersion,
-            text,
+            text: "",
         },
     });
 }
 
+function updateAlpineContext(xDataObject: string, jsSnippet: string) {
+    alpineVersion++;
+    const regex = /([A-Za-z_$][\w$]*)\s*:/g;
+    const props: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(xDataObject))) props.push(m[1]);
+
+    tsConnection.sendNotification("textDocument/didChange", {
+        textDocument: { uri: alpineUri!, version: alpineVersion },
+        contentChanges: [
+            {
+                range: {
+                    start: { line: 0, character: 0 },
+                    end: { line: 0, character: Infinity },
+                },
+                text: `const { ${props.join(", ")} } = ${xDataObject};`,
+            },
+            {
+                range: {
+                    start: { line: 1, character: 0 },
+                    end: { line: 1, character: Infinity },
+                },
+                text: jsSnippet,
+            },
+        ],
+    });
+}
+
 let lastSeenXData = "";
-documents.onDidChangeContent(({ document }) => {
-    const text = document.getText();
-    const xDataMatch = text.match(/x-data\s*=\s*"({[^"]*})"/);
-    if (xDataMatch) {
-        const newObject = xDataMatch[1];
-        if (newObject !== lastSeenXData) {
-            lastSeenXData = newObject;
-            openAlpineContext(document.uri, newObject);
-        }
-    }
-});
 
 async function getFragments(
     params: CompletionParams,
@@ -120,8 +131,6 @@ function isInHtmlTag(fragmentBefore: string): boolean {
 }
 
 connection.onCompletion(async (params): Promise<CompletionItem[]> => {
-    const doc = documents.get(params.textDocument.uri)!;
-
     const { fragmentBefore, fragmentAfter } = await getFragments(params, 20);
 
     if (!isInHtmlTag(fragmentBefore)) {
@@ -162,19 +171,12 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
             fragmentAfter.slice(0, closeQuoteIdx);
     }
 
-    alpineVersion++;
-    tsConnection.sendNotification("textDocument/didChange", {
-        textDocument: { uri: alpineUri, version: alpineVersion },
-        contentChanges: [
-            {
-                range: {
-                    start: { line: 1, character: 0 },
-                    end: { line: 1, character: Infinity },
-                },
-                text: jsSnippet,
-            },
-        ],
-    });
+    if (!alpineUri) {
+        openAlpineContext(params);
+    }
+
+    updateAlpineContext(lastSeenXData, jsSnippet);
+    lastSeenXData = jsSnippet;
 
     const tsCompletions = await tsConnection.sendRequest(
         "textDocument/completion",
