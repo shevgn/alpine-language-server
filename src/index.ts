@@ -5,13 +5,12 @@ import {
     InitializeParams,
     CompletionItem,
     TextDocumentSyncKind,
-    TextDocumentChangeEvent,
     createProtocolConnection,
     StreamMessageReader,
     StreamMessageWriter,
-    CompletionParams,
     InitializeRequest,
     InitializedNotification,
+    CompletionParams,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
@@ -39,15 +38,11 @@ const initResult = await tsConnection.sendRequest(InitializeRequest.method, {
 
 tsConnection.sendNotification(InitializedNotification.method);
 
-tsConnection.onNotification("window/logMessage", (msg) => {
-    connection.console.log(`[ts-ls] ${msg.message}`);
-});
-tsConnection.onNotification("textDocument/publishDiagnostics", (diag) => {
-    connection.console.log(`[ts-ls diagnostics] ${JSON.stringify(diag)}`);
-});
-
 const connection = createConnection();
 const documents: TextDocuments<TextDocument> = new TextDocuments(TextDocument);
+
+documents.listen(connection);
+connection.listen();
 
 connection.onInitialize((_params: InitializeParams) => ({
     capabilities: {
@@ -60,26 +55,48 @@ connection.onInitialize((_params: InitializeParams) => ({
     },
 }));
 
-connection.onInitialized(() => {
-    connection.console.log("Alpine.js Language Server is running.");
+let alpineUri: string | null = null;
+let alpineVersion = 0;
+
+function openAlpineContext(fileUri: string, xDataObject: string) {
+    alpineUri = `inmemory://model/${fileUri}.alpine.js`;
+    alpineVersion = 1;
+
+    const regex = /([A-Za-z_$][\w$]*)\s*:/g;
+    const props: string[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = regex.exec(xDataObject))) props.push(m[1]);
+
+    const text = `const { ${props.join(", ")} } = ${xDataObject};\n`;
+
+    tsConnection.sendNotification("textDocument/didOpen", {
+        textDocument: {
+            uri: alpineUri,
+            languageId: "javascript",
+            version: alpineVersion,
+            text,
+        },
+    });
+}
+
+let lastSeenXData = "";
+documents.onDidChangeContent(({ document }) => {
+    const text = document.getText();
+    const xDataMatch = text.match(/x-data\s*=\s*"({[^"]*})"/);
+    if (xDataMatch) {
+        const newObject = xDataMatch[1];
+        if (newObject !== lastSeenXData) {
+            lastSeenXData = newObject;
+            openAlpineContext(document.uri, newObject);
+        }
+    }
 });
 
-connection.onHover(() => {
-    return {
-        contents: ["# Alpine.js Language Server"],
-    };
-});
-
-documents.onDidChangeContent(
-    (change: TextDocumentChangeEvent<TextDocument>) => {}
-);
-
-documents.onDidClose((e) => {});
-
-connection.onCompletion(async (params): Promise<CompletionItem[]> => {
+async function getFragments(
+    params: CompletionParams,
+    maxLines: number
+): Promise<{ fragmentBefore: string; fragmentAfter: string }> {
     const doc = documents.get(params.textDocument.uri)!;
-
-    const maxLines = 20;
     const startLine = Math.max(0, params.position.line - maxLines);
     const fragmentBefore = doc.getText({
         start: { line: startLine, character: 0 },
@@ -89,11 +106,25 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
         start: params.position,
         end: { line: params.position.line + maxLines, character: 0 },
     });
+    return { fragmentBefore, fragmentAfter };
+}
 
+function isInHtmlTag(fragmentBefore: string): boolean {
     const lastLt = fragmentBefore.lastIndexOf("<");
     const lastGt = fragmentBefore.lastIndexOf(">");
     const lastSlash = fragmentBefore.lastIndexOf("/");
     if (lastLt <= lastGt || lastLt <= lastSlash) {
+        return false;
+    }
+    return true;
+}
+
+connection.onCompletion(async (params): Promise<CompletionItem[]> => {
+    const doc = documents.get(params.textDocument.uri)!;
+
+    const { fragmentBefore, fragmentAfter } = await getFragments(params, 20);
+
+    if (!isInHtmlTag(fragmentBefore)) {
         return [];
     }
 
@@ -126,39 +157,33 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     if (closeQuoteIdx === -1) {
         jsSnippet = fragmentAfter;
     } else {
-        jsSnippet = fragmentAfter.slice(0, closeQuoteIdx);
+        jsSnippet =
+            fragmentBefore.slice(openQuoteIdx + 1) +
+            fragmentAfter.slice(0, closeQuoteIdx);
     }
 
-    const jsText = fragmentBefore.slice(openQuoteIdx + 1) + jsSnippet;
-
-    const jsParams: CompletionParams = {
-        textDocument: {
-            uri: `inmemory://model/${params.textDocument.uri}.js`,
-        },
-        position: { line: 0, character: jsText.length },
-        context: params.context,
-    };
-
-    tsConnection.sendNotification("textDocument/didOpen", {
-        textDocument: {
-            uri: jsParams.textDocument.uri,
-            languageId: "javascript",
-            version: 1,
-            text: jsText,
-        },
+    alpineVersion++;
+    tsConnection.sendNotification("textDocument/didChange", {
+        textDocument: { uri: alpineUri, version: alpineVersion },
+        contentChanges: [
+            {
+                range: {
+                    start: { line: 1, character: 0 },
+                    end: { line: 1, character: Infinity },
+                },
+                text: jsSnippet,
+            },
+        ],
     });
 
     const tsCompletions = await tsConnection.sendRequest(
         "textDocument/completion",
-        jsParams
+        {
+            textDocument: { uri: alpineUri },
+            position: { line: 1, character: jsSnippet.length },
+            context: params.context,
+        }
     );
-
-    tsConnection.sendNotification("textDocument/didClose", {
-        textDocument: { uri: jsParams.textDocument.uri },
-    });
 
     return tsCompletions as CompletionItem[];
 });
-
-documents.listen(connection);
-connection.listen();
