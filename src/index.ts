@@ -4,12 +4,7 @@ import {
     InitializeParams,
     CompletionItem,
     TextDocumentSyncKind,
-    createProtocolConnection,
-    StreamMessageReader,
-    StreamMessageWriter,
-    InitializeRequest,
-    InitializedNotification,
-    CompletionParams,
+    CompletionItemKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
@@ -23,6 +18,8 @@ import {
     openAlpineContext,
     setupTypescriptServer,
 } from "./typescript-server.js";
+import { extractXDataProps, getFragments, isInHtmlTag } from "./helpers.js";
+import { tagsWithXData } from "./html-parser.js";
 
 const tsConnection = await setupTypescriptServer();
 
@@ -43,35 +40,16 @@ connection.onInitialize((_params: InitializeParams) => ({
     },
 }));
 
-async function getFragments(
-    params: CompletionParams,
-    maxLines: number
-): Promise<{ fragmentBefore: string; fragmentAfter: string }> {
-    const doc = documents.get(params.textDocument.uri)!;
-    const startLine = Math.max(0, params.position.line - maxLines);
-    const fragmentBefore = doc.getText({
-        start: { line: startLine, character: 0 },
-        end: params.position,
-    });
-    const fragmentAfter = doc.getText({
-        start: params.position,
-        end: { line: params.position.line + maxLines, character: 0 },
-    });
-    return { fragmentBefore, fragmentAfter };
-}
-
-function isInHtmlTag(fragmentBefore: string): boolean {
-    const lastLt = fragmentBefore.lastIndexOf("<");
-    const lastGt = fragmentBefore.lastIndexOf(">");
-    const lastSlash = fragmentBefore.lastIndexOf("/");
-    if (lastLt <= lastGt || lastLt <= lastSlash) {
-        return false;
-    }
-    return true;
-}
-
 connection.onCompletion(async (params): Promise<CompletionItem[]> => {
-    const { fragmentBefore, fragmentAfter } = await getFragments(params, 20);
+    const doc = documents.get(params.textDocument.uri)!;
+    const offset = doc.offsetAt(params.position);
+    const text = doc.getText();
+
+    const { fragmentBefore, fragmentAfter } = await getFragments(
+        doc,
+        params,
+        20
+    );
 
     if (!isInHtmlTag(fragmentBefore)) {
         return [];
@@ -94,6 +72,21 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
         return getDirectiveCompletions();
     }
+
+    const xDataTags = tagsWithXData(text);
+
+    const activeTag = xDataTags.findLast((tag) => {
+        return offset >= tag.range.start && offset <= tag.range.end;
+    });
+
+    if (!activeTag) return [];
+
+    const props = await extractXDataProps(activeTag.xData);
+
+    return props.map((prop) => ({
+        label: prop.name,
+        kind: prop.kind,
+    }));
 
     const openQuoteIdx = fragmentBefore.lastIndexOf('"');
     if (openQuoteIdx === -1) {
