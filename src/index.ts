@@ -4,7 +4,6 @@ import {
     InitializeParams,
     CompletionItem,
     TextDocumentSyncKind,
-    CompletionItemKind,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
@@ -18,8 +17,9 @@ import {
     openAlpineContext,
     setupTypescriptServer,
 } from "./typescript-server.js";
-import { extractXDataProps, getFragments, isInHtmlTag } from "./helpers.js";
-import { tagsWithXData } from "./html-parser.js";
+import { fullTagXData } from "./js-parser.js";
+import { getFragments, isInHtmlTag, tagsWithXData } from "./html-parser.js";
+import { XDataProps } from "./types.js";
 
 const tsConnection = await setupTypescriptServer();
 
@@ -45,11 +45,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     const offset = doc.offsetAt(params.position);
     const text = doc.getText();
 
-    const { fragmentBefore, fragmentAfter } = await getFragments(
-        doc,
-        params,
-        20
-    );
+    const { fragmentBefore, fragmentAfter } = getFragments(doc, params, 20);
 
     if (!isInHtmlTag(fragmentBefore)) {
         return [];
@@ -81,7 +77,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
     if (!activeTag) return [];
 
-    const props = await extractXDataProps(activeTag.xData);
+    const props: XDataProps[] = fullTagXData(activeTag);
 
     return props.map((prop) => ({
         label: prop.name,
