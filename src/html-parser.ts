@@ -1,5 +1,47 @@
 import { HTMLElement, parse } from "node-html-parser";
 import { XDataTag } from "./types.js";
+import { TextDocument } from "vscode-languageserver-textdocument";
+import { CompletionParams } from "vscode-languageserver";
+
+function parentWithXData(
+    element: HTMLElement,
+    root: HTMLElement
+): XDataTag | null {
+    let parent = element.parentNode as HTMLElement | null;
+
+    if (!parent) {
+        return null;
+    }
+    if (parent.tagName === "HTML") {
+        return null;
+    }
+    if (parent.tagName === root.tagName) {
+        if (parent.hasAttribute("x-data")) {
+            return {
+                tag: parent.tagName,
+                xData: parent.getAttribute("x-data")!,
+                range: {
+                    start: parent.range[0],
+                    end: parent.range[1],
+                },
+                parentDataProvider: null,
+            };
+        }
+    }
+    if (parent.hasAttribute("x-data")) {
+        return {
+            tag: parent.tagName,
+            xData: parent.getAttribute("x-data")!,
+            range: {
+                start: parent.range[0],
+                end: parent.range[1],
+            },
+            parentDataProvider: parentWithXData(parent, root),
+        };
+    }
+
+    return null;
+}
 
 function tagsWithXData(html: string): XDataTag[] {
     const root = parse(html);
@@ -14,8 +56,36 @@ function tagsWithXData(html: string): XDataTag[] {
             tag: element.tagName,
             xData: element.getAttribute("x-data")!,
             range,
+            parentDataProvider: parentWithXData(element, root),
         };
     });
 }
 
-export { tagsWithXData };
+function getFragments(
+    document: TextDocument,
+    params: CompletionParams,
+    maxLines: number
+): { fragmentBefore: string; fragmentAfter: string } {
+    const startLine = Math.max(0, params.position.line - maxLines);
+    const fragmentBefore = document.getText({
+        start: { line: startLine, character: 0 },
+        end: params.position,
+    });
+    const fragmentAfter = document.getText({
+        start: params.position,
+        end: { line: params.position.line + maxLines, character: 0 },
+    });
+    return { fragmentBefore, fragmentAfter };
+}
+
+function isInHtmlTag(fragmentBefore: string): boolean {
+    const lastLt = fragmentBefore.lastIndexOf("<");
+    const lastGt = fragmentBefore.lastIndexOf(">");
+    const lastSlash = fragmentBefore.lastIndexOf("/");
+    if (lastLt <= lastGt || lastLt <= lastSlash) {
+        return false;
+    }
+    return true;
+}
+
+export { tagsWithXData, getFragments, isInHtmlTag, parentWithXData };
