@@ -32,11 +32,12 @@ function extractXDataProps(xDataString: string): XDataProps[] {
 }
 
 function fullTagXData(tag: XDataTag): XDataProps[] {
-    const context = extractXDataProps(tag.xData);
+    const context: XDataProps[] = [];
+    let current: XDataTag | null = tag;
 
-    if (tag.parentDataProvider) {
-        const parentContext = fullTagXData(tag.parentDataProvider);
-        return [...context, ...parentContext];
+    while (current) {
+        context.push(...extractXDataProps(current.xData));
+        current = current.parentDataProvider;
     }
 
     return context;
