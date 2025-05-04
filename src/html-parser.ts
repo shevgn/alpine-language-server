@@ -61,6 +61,16 @@ function tagsWithXData(html: string): XDataTag[] {
     });
 }
 
+function existingAttributes(html: string, offset: number): string[] {
+    const root = parse(html);
+    const el = root
+        .querySelectorAll("*")
+        .findLast((e) => e.range[0] <= offset && offset <= e.range[1]);
+    if (!el) return [];
+
+    return Object.keys(el.attributes).map((name) => name.toLowerCase());
+}
+
 function getFragments(
     document: TextDocument,
     params: CompletionParams,
@@ -88,4 +98,10 @@ function isInHtmlTag(fragmentBefore: string): boolean {
     return true;
 }
 
-export { tagsWithXData, getFragments, isInHtmlTag, parentWithXData };
+export {
+    tagsWithXData,
+    getFragments,
+    isInHtmlTag,
+    parentWithXData,
+    existingAttributes,
+};
