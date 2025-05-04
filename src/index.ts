@@ -4,9 +4,13 @@ import {
     InitializeParams,
     CompletionItem,
     TextDocumentSyncKind,
+    DiagnosticSeverity,
+    CompletionList,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import {
+    getAttributesCompletions,
+    getAttributeShorthandCompletions,
     getDirectiveCompletions,
     getEventCompletions,
     getModifierCompletions,
@@ -16,9 +20,15 @@ import {
     getAlpineUri,
     openAlpineContext,
     setupTypescriptServer,
+    updateAlpineContext,
 } from "./typescript-server.js";
-import { fullTagXData } from "./js-parser.js";
-import { getFragments, isInHtmlTag, tagsWithXData } from "./html-parser.js";
+import { extractJSSnippet, fullTagXData } from "./js-parser.js";
+import {
+    existingAttributes,
+    getFragments,
+    isInHtmlTag,
+    tagsWithXData,
+} from "./html-parser.js";
 import { XDataProps } from "./types.js";
 
 const tsConnection = await setupTypescriptServer();
@@ -36,7 +46,6 @@ connection.onInitialize((_params: InitializeParams) => ({
             triggerCharacters: [".", "@", ":"],
             resolveProvider: true,
         },
-        hoverProvider: true,
     },
 }));
 
@@ -44,6 +53,11 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     const doc = documents.get(params.textDocument.uri)!;
     const offset = doc.offsetAt(params.position);
     const text = doc.getText();
+
+    // connection.sendNotification("window/showMessage", {
+    //     type: DiagnosticSeverity.Information,
+    //     message: existingAttributes(text, offset).join(", "),
+    // });
 
     const { fragmentBefore, fragmentAfter } = getFragments(doc, params, 20);
 
@@ -54,19 +68,29 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     const inQuotes = (fragmentBefore.split('"').length - 1) % 2 === 1;
 
     if (!inQuotes) {
+        const existingAttrs = existingAttributes(text, offset);
+        let completions: CompletionItem[] = [];
+
         if (fragmentBefore.endsWith("x-on:")) {
-            return getEventCompletions();
+            completions = getEventCompletions();
         }
-
+        if (fragmentBefore.endsWith("x-bind:")) {
+            completions = getAttributesCompletions();
+        }
+        if (fragmentBefore.endsWith(" :")) {
+            completions = getAttributeShorthandCompletions();
+        }
         if (fragmentBefore.endsWith("@")) {
-            return getShorthandCompletions();
+            completions = getShorthandCompletions();
         }
-
         if (fragmentBefore.endsWith(".")) {
-            return getModifierCompletions();
+            completions = getModifierCompletions();
         }
+        completions = getDirectiveCompletions();
 
-        return getDirectiveCompletions();
+        return completions.filter((c) => {
+            return !existingAttrs.includes(c.label.toLowerCase());
+        });
     }
 
     const xDataTags = tagsWithXData(text);
@@ -78,33 +102,24 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     if (!activeTag) return [];
 
     const props: XDataProps[] = fullTagXData(activeTag);
-
-    return props.map((prop) => ({
+    const xDataProps: CompletionItem[] = props.map((prop) => ({
         label: prop.name,
         kind: prop.kind,
+        data: {
+            source: "x-data",
+        },
+        detail: `x-data: ${prop.name}`,
     }));
-
-    const openQuoteIdx = fragmentBefore.lastIndexOf('"');
-    if (openQuoteIdx === -1) {
-        return [];
-    }
-
-    let jsSnippet = "";
-    const closeQuoteIdx = fragmentAfter.indexOf('"');
-
-    if (closeQuoteIdx === -1) {
-        jsSnippet = fragmentAfter;
-    } else {
-        jsSnippet =
-            fragmentBefore.slice(openQuoteIdx + 1) +
-            fragmentAfter.slice(0, closeQuoteIdx);
-    }
 
     if (!getAlpineUri()) {
         openAlpineContext(params);
     }
 
-    const tsCompletions = await tsConnection.sendRequest(
+    const jsSnippet = extractJSSnippet(fragmentBefore, fragmentAfter);
+
+    updateAlpineContext(jsSnippet);
+
+    const rawTsCompletions = await tsConnection.sendRequest(
         "textDocument/completion",
         {
             textDocument: { uri: getAlpineUri() },
@@ -113,5 +128,9 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
         }
     );
 
-    return tsCompletions as CompletionItem[];
+    const tsCompletions: CompletionItem[] = Array.isArray(rawTsCompletions)
+        ? rawTsCompletions
+        : (rawTsCompletions as CompletionList).items;
+
+    return [...tsCompletions, ...xDataProps];
 });
