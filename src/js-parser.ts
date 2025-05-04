@@ -43,4 +43,27 @@ function fullTagXData(tag: XDataTag): XDataProps[] {
     return context;
 }
 
-export { extractXDataProps, fullTagXData };
+function extractJSSnippet(
+    fragmentBefore: string,
+    fragmentAfter: string
+): string {
+    const openQuoteIdx = fragmentBefore.lastIndexOf('"');
+    if (openQuoteIdx === -1) {
+        return "";
+    }
+
+    let jsSnippet = "";
+    const closeQuoteIdx = fragmentAfter.indexOf('"');
+
+    if (closeQuoteIdx === -1) {
+        jsSnippet = fragmentAfter;
+    } else {
+        jsSnippet =
+            fragmentBefore.slice(openQuoteIdx + 1) +
+            fragmentAfter.slice(0, closeQuoteIdx);
+    }
+
+    return jsSnippet;
+}
+
+export { extractXDataProps, fullTagXData, extractJSSnippet };
