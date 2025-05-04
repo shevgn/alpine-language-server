@@ -11,6 +11,7 @@ import {
 
 let tsConnection: ProtocolConnection | null = null;
 let alpineUri: string | null = null;
+let alpineVersion: number = 0;
 
 async function setupTypescriptServer(): Promise<ProtocolConnection> {
     const tsProcess: ChildProcess = spawn("typescript-language-server", [
@@ -46,14 +47,29 @@ function openAlpineContext(params: CompletionParams): void {
         textDocument: {
             uri: alpineUri,
             languageId: "javascript",
-            version: 1,
+            version: alpineVersion,
             text: "",
         },
     });
 }
 
-function getAlpineUri(): string {
-    return alpineUri!;
+function updateAlpineContext(text: string): void {
+    tsConnection!.sendNotification("textDocument/didChange", {
+        textDocument: {
+            uri: alpineUri,
+            version: ++alpineVersion,
+            text: text,
+        },
+    });
 }
 
-export { setupTypescriptServer, getAlpineUri, openAlpineContext };
+function getAlpineUri(): string {
+    return alpineUri ?? "";
+}
+
+export {
+    setupTypescriptServer,
+    getAlpineUri,
+    openAlpineContext,
+    updateAlpineContext,
+};
