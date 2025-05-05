@@ -3,44 +3,19 @@ import { XDataTag } from "./types.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { CompletionParams } from "vscode-languageserver";
 
-function parentWithXData(
-    element: HTMLElement,
-    root: HTMLElement
-): XDataTag | null {
+function parentXData(element: HTMLElement): string {
     let parent = element.parentNode as HTMLElement | null;
 
     if (!parent) {
-        return null;
+        return "";
     }
     if (parent.tagName === "HTML") {
-        return null;
-    }
-    if (parent.tagName === root.tagName) {
-        if (parent.hasAttribute("x-data")) {
-            return {
-                tag: parent.tagName,
-                xData: parent.getAttribute("x-data")!,
-                range: {
-                    start: parent.range[0],
-                    end: parent.range[1],
-                },
-                parentDataProvider: null,
-            };
-        }
+        return "";
     }
     if (parent.hasAttribute("x-data")) {
-        return {
-            tag: parent.tagName,
-            xData: parent.getAttribute("x-data")!,
-            range: {
-                start: parent.range[0],
-                end: parent.range[1],
-            },
-            parentDataProvider: parentWithXData(parent, root),
-        };
+        return parent.getAttribute("x-data")!;
     }
-
-    return null;
+    return "";
 }
 
 function tagsWithXData(html: string): XDataTag[] {
@@ -56,7 +31,7 @@ function tagsWithXData(html: string): XDataTag[] {
             tag: element.tagName,
             xData: element.getAttribute("x-data")!,
             range,
-            parentDataProvider: parentWithXData(element, root),
+            parentData: parentXData(element),
         };
     });
 }
@@ -102,6 +77,6 @@ export {
     tagsWithXData,
     getFragments,
     isInHtmlTag,
-    parentWithXData,
+    parentXData,
     existingAttributes,
 };
