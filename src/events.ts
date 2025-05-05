@@ -88,7 +88,7 @@ const events = (): CompletionItem[] => {
         label: event.name,
         kind: CompletionItemKind.Event,
         insertText: event.name,
-        insertTextFormat: InsertTextFormat.Snippet,
+        insertTextFormat: InsertTextFormat.PlainText,
         documentation: event.documentation,
     }));
 };
