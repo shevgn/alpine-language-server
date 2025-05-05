@@ -2,10 +2,12 @@ import {
     CompletionItem,
     CompletionItemKind,
     InsertTextFormat,
+    MarkupContent,
 } from "vscode-languageserver";
 import { directives } from "./directives.js";
 import { events } from "./events.js";
 import { modifiers } from "./modifiers.js";
+import { attributes } from "./attributes.js";
 
 function getDirectiveCompletions(): CompletionItem[] {
     return directives().map((item) => ({
@@ -40,9 +42,34 @@ function getModifierCompletions(): CompletionItem[] {
     }));
 }
 
+function getAttributesCompletions(): CompletionItem[] {
+    return attributes().map((attribute) => ({
+        ...attribute,
+        data: { source: "alpine", incomplete: true },
+    }));
+}
+
+function getAttributeShorthandCompletions(): CompletionItem[] {
+    return attributes().map((attribute) => ({
+        label: `:${attribute.label}`,
+        kind: CompletionItemKind.Value,
+        insertText: ":" + attribute.label + '="${1}"',
+        insertTextFormat: InsertTextFormat.Snippet,
+        documentation: {
+            kind: "markdown",
+            value:
+                (attribute.documentation as MarkupContent).value +
+                `\nShorthand for x-bind:${attribute.label}`,
+        } as MarkupContent,
+        data: { source: "alpine", incomplete: true },
+    }));
+}
+
 export {
     getDirectiveCompletions,
     getShorthandCompletions,
     getEventCompletions,
     getModifierCompletions,
+    getAttributesCompletions,
+    getAttributeShorthandCompletions,
 };
