@@ -4,7 +4,6 @@ import {
     InitializeParams,
     CompletionItem,
     TextDocumentSyncKind,
-    DiagnosticSeverity,
     CompletionList,
 } from "vscode-languageserver/node.js";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -22,7 +21,11 @@ import {
     setupTypescriptServer,
     updateAlpineContext,
 } from "./typescript-server.js";
-import { extractJSSnippet, fullTagXData } from "./js-parser.js";
+import {
+    extractJSSnippet,
+    extractXDataProps,
+    fullTagXData,
+} from "./js-parser.js";
 import {
     existingAttributes,
     getFragments,
@@ -54,11 +57,6 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     const offset = doc.offsetAt(params.position);
     const text = doc.getText();
 
-    // connection.sendNotification("window/showMessage", {
-    //     type: DiagnosticSeverity.Information,
-    //     message: existingAttributes(text, offset).join(", "),
-    // });
-
     const { fragmentBefore, fragmentAfter } = getFragments(doc, params, 20);
 
     if (!isInHtmlTag(fragmentBefore)) {
@@ -73,24 +71,21 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
         if (fragmentBefore.endsWith("x-on:")) {
             completions = getEventCompletions();
-        }
-        if (fragmentBefore.endsWith("x-bind:")) {
+        } else if (fragmentBefore.endsWith("x-bind:")) {
             completions = getAttributesCompletions();
-        }
-        if (fragmentBefore.endsWith(" :")) {
+        } else if (fragmentBefore.endsWith(" :")) {
             completions = getAttributeShorthandCompletions();
-        }
-        if (fragmentBefore.endsWith("@")) {
+        } else if (fragmentBefore.endsWith("@")) {
             completions = getShorthandCompletions();
-        }
-        if (fragmentBefore.endsWith(".")) {
+        } else if (fragmentBefore.endsWith(".")) {
             completions = getModifierCompletions();
+        } else {
+            completions = getDirectiveCompletions();
         }
-        completions = getDirectiveCompletions();
 
-        return completions.filter((c) => {
-            return !existingAttrs.includes(c.label.toLowerCase());
-        });
+        return completions.filter(
+            (c) => !existingAttrs.includes(c.label.toLowerCase())
+        );
     }
 
     const xDataTags = tagsWithXData(text);
@@ -101,7 +96,13 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
     if (!activeTag) return [];
 
-    const props: XDataProps[] = fullTagXData(activeTag);
+    let props: XDataProps[] = [];
+
+    if (/x-data="[^"]*$/.test(fragmentBefore)) {
+        props = fullTagXData(activeTag);
+    } else {
+        props = extractXDataProps(activeTag.xData);
+    }
     const xDataProps: CompletionItem[] = props.map((prop) => ({
         label: prop.name,
         kind: prop.kind,
