@@ -7,5 +7,5 @@ export type XDataTag = {
     tag: string;
     xData: string;
     range: { start: number; end: number };
-    parentDataProvider: XDataTag | null;
+    parentData?: string;
 };
