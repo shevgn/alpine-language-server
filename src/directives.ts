@@ -3,17 +3,17 @@ import {
     CompletionItemKind,
     InsertTextFormat,
 } from "vscode-languageserver";
+import { Documented, Named } from "./types.js";
 
-type Directive = {
-    name: string;
-    description: string;
-    insertText?: string;
-};
+type Directive = Named &
+    Documented & {
+        insertText?: string;
+    };
 
 const directivesList: Directive[] = [
     {
         name: "x-data",
-        description: `
+        documentation: `
 Defines a chunk of HTML as an Alpine component and provides the reactive data for that component to reference.
 **Example:**
 \`\`\`html
@@ -29,7 +29,7 @@ Defines a chunk of HTML as an Alpine component and provides the reactive data fo
     },
     {
         name: "x-init",
-        description: `
+        documentation: `
 Allows you to hook into the initialization phase of any element in Alpine.
 **Example:**
 \`\`\`html
@@ -39,7 +39,7 @@ Allows you to hook into the initialization phase of any element in Alpine.
     },
     {
         name: "x-show",
-        description: `
+        documentation: `
 Allows you to conditionally show or hide an element based on a boolean value.
 **Example:**
 \`\`\`html
@@ -55,7 +55,7 @@ Allows you to conditionally show or hide an element based on a boolean value.
     },
     {
         name: "x-bind",
-        description: `
+        documentation: `
 Allows you to bind HTML attributes to Alpine data.
 **Example:**
 \`\`\`html
@@ -68,7 +68,7 @@ Allows you to bind HTML attributes to Alpine data.
     },
     {
         name: "x-on",
-        description: `
+        documentation: `
 Allows you to easily run code on dispatched DOM events.
 **Example:**
 \`\`\`html
@@ -79,7 +79,7 @@ Allows you to easily run code on dispatched DOM events.
     },
     {
         name: "x-text",
-        description: `
+        documentation: `
 Allows you to set the text content of an element to the result of a given expression.
 **Example:**
 \`\`\`html
@@ -91,7 +91,7 @@ Allows you to set the text content of an element to the result of a given expres
     },
     {
         name: "x-html",
-        description: `
+        documentation: `
 Allows you to set the innerHTML property of an element to the result of a given expression.
 **Example:**
 \`\`\`html
@@ -103,7 +103,7 @@ Allows you to set the innerHTML property of an element to the result of a given 
     },
     {
         name: "x-model",
-        description: `
+        documentation: `
 Allows you to create two-way data bindings between form elements and Alpine data.
 **Example:**
 \`\`\`html
@@ -117,7 +117,7 @@ Allows you to create two-way data bindings between form elements and Alpine data
     },
     {
         name: "x-modelable",
-        description: `
+        documentation: `
 Allows you to expose any Alpine property as the target of the x-model directive.
 **Example:**
 \`\`\`html
@@ -133,7 +133,7 @@ Allows you to expose any Alpine property as the target of the x-model directive.
     },
     {
         name: "x-for",
-        description: `
+        documentation: `
 Allows you to create DOM elements by iterating through a list.
 **Example:**
 \`\`\`html
@@ -147,7 +147,7 @@ Allows you to create DOM elements by iterating through a list.
     },
     {
         name: "x-transition",
-        description: `
+        documentation: `
 Allows you can create smooth transitions between when an element is shown or hidden.
 **Example:**
 \`\`\`html
@@ -163,7 +163,7 @@ Allows you can create smooth transitions between when an element is shown or hid
     },
     {
         name: "x-effect",
-        description: `
+        documentation: `
 Allows you to run a function whenever the data it references changes.
 **Example:**
 \`\`\`html
@@ -175,7 +175,7 @@ Allows you to run a function whenever the data it references changes.
     },
     {
         name: "x-ignore",
-        description: `
+        documentation: `
 Allows you to ignore a chunk of HTML from being processed by Alpine.
 **Example:**
 \`\`\`html
@@ -189,7 +189,7 @@ Allows you to ignore a chunk of HTML from being processed by Alpine.
     },
     {
         name: "x-ref",
-        description: `
+        documentation: `
 Allows you to create a reference to an element in your Alpine component. 
 **Example:** 
 \`\`\`html
@@ -201,7 +201,7 @@ Allows you to create a reference to an element in your Alpine component.
     },
     {
         name: "x-cloak",
-        description: `
+        documentation: `
 Allows you to hide a chunk of HTML until Alpine is fully initialized.
 **Example:**
 \`\`\`html
@@ -211,7 +211,7 @@ Allows you to hide a chunk of HTML until Alpine is fully initialized.
     },
     {
         name: "x-teleport",
-        description: `
+        documentation: `
 Allows you to transport part of your Alpine template to another part of the DOM on the page entirely.
 **Example:**
 \`\`\`html
@@ -228,7 +228,7 @@ Allows you to transport part of your Alpine template to another part of the DOM 
     },
     {
         name: "x-if",
-        description: `
+        documentation: `
 Allows you to conditionally render a chunk of HTML based on a boolean value.
 Because of this difference in behavior, **x-if** should not be applied directly to the element, but instead to a **<template>** tag that encloses the element. This way, Alpine can keep a record of the element once it's removed from the page.
 **Example:**
@@ -241,7 +241,7 @@ Because of this difference in behavior, **x-if** should not be applied directly 
     },
     {
         name: "x-id",
-        description: `
+        documentation: `
 Allows you to generate unique IDs for elements in your Alpine component.
 **Example:**
 \`\`\`html
@@ -270,7 +270,7 @@ const directives = (): CompletionItem[] => {
         kind: CompletionItemKind.Keyword,
         documentation: {
             kind: "markdown",
-            value: directive.description,
+            value: directive.documentation,
         },
         insertText: directive.insertText
             ? directive.insertText

@@ -3,11 +3,9 @@ import {
     CompletionItemKind,
     InsertTextFormat,
 } from "vscode-languageserver";
+import { Documented, Named } from "./types.js";
 
-type Event = {
-    name: string;
-    documentation: string;
-};
+type Event = Named & Documented;
 
 const keyboardEvents: Event[] = [
     {
