@@ -33,6 +33,7 @@ import {
     tagsWithXData,
 } from "./html-parser.js";
 import { XDataProps } from "./types.js";
+import { magics } from "./magics.js";
 
 const tsConnection = await setupTypescriptServer();
 
@@ -46,7 +47,7 @@ connection.onInitialize((_params: InitializeParams) => ({
     capabilities: {
         textDocumentSync: TextDocumentSyncKind.Incremental,
         completionProvider: {
-            triggerCharacters: [".", "@", ":"],
+            triggerCharacters: [".", "@", ":", "$"],
             resolveProvider: true,
         },
     },
@@ -97,6 +98,10 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     if (!activeTag) return [];
 
     let props: XDataProps[] = [];
+
+    if (fragmentBefore.endsWith("$")) {
+        return magics();
+    }
 
     if (/x-data="[^"]*$/.test(fragmentBefore)) {
         props = fullTagXData(activeTag);
