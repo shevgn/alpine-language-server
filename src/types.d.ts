@@ -9,3 +9,18 @@ export type XDataTag = {
     range: { start: number; end: number };
     parentData?: string;
 };
+
+export type Documented = {
+    documentation: string;
+};
+
+export type DocumentedMarkup = {
+    documentation: {
+        kind: "markdown";
+        value: string;
+    };
+};
+
+export type Named = {
+    name: string;
+};
